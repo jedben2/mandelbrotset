@@ -7,41 +7,40 @@ pygame.font.init()
 text_font = pygame.font.SysFont('Comic Sans MS', 30)
 win = pygame.display.set_mode((800, 800))
 
-def mandelbrot(c, n):
-    z = 0
-    for i in range(n):
-        z = z ** 2 + c
-        if np.abs(z) >= 2:
-            return i
-    return n
-
 topleft = -2 + 1.5j
 increment = 0.005
-
-#topleft = -0.5080700000000001+0.65207j
-#increment = 6.999999999999993e-05
+N = 300
+# topleft = -0.311962621923828+0.6462113426464844j
+# increment = 2.994653320320673e-09
 
 plane = np.array([[topleft + (k - i * 1j)* increment for i in range(800)] for k in range(800)])
 mandelbrot_plane = np.zeros((800, 800))
 
+def colouring(x):
+    return x * 255 / N
+
+def mandelbrot(c, n):
+    z = 0
+    for i in range(n):
+        z = np.power(z, 2) + z + c
+        if np.abs(z) >= 2:
+            return i
+    return n
+
 def generate():
+    print("Start rendering")
+    win.fill((0, 0, 0))
     t1 = time.time()
     for i in range(800):
         for j in range(800):
-            mandelbrot_plane[i, j] = mandelbrot(plane[i, j], 500)
-
-    win.fill((0, 0, 0))
-    maximum = np.max(mandelbrot_plane)
-    for i in range(800):
-        for j in range(800):
-            pygame.draw.circle(win, color=mandelbrot_plane[i, j] * (255 / maximum) * np.array([1,1,1]), center=(i, j), radius=1)
+            win.set_at((i,j), colouring(mandelbrot(plane[i, j], N)) * np.array([1,1,1]))
 
     zoom_text = text_font.render(f"{round(0.005 / increment)}x", False, (255, 255, 255))
     pygame.draw.rect(win, color=(0,0,0), rect=pygame.Rect(0, 750, 40 + zoom_text.get_width(), 50))
     win.blit(zoom_text, (20, 750))
 
     pygame.image.save(win, "mandelbrot.png")
-    print(time.time() - t1)
+    print(f"time taken: {round(time.time() - t1, 4)}s\n")
 
 generate()
 running = True
@@ -58,14 +57,12 @@ while running:
             if mouse_down:
                 end_coord = pygame.mouse.get_pos()
                 bottomright = plane[end_coord[0], end_coord[1]]
-                print(topleft, bottomright)
                 diff = max(np.abs(topleft.real - bottomright.real), np.abs(topleft.imag - bottomright.imag))
-                print(diff)
                 increment = diff / 800
                 mouse_down = False
 
                 plane = np.array([[topleft + (k - i * 1j) * increment for i in range(800)] for k in range(800)])
-                print(plane[-1,-1], topleft, increment)
+                print(f"Zooming in at topleft {topleft} and increment {increment}\n")
 
                 generate()
             else:
