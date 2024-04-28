@@ -1,7 +1,9 @@
 import numpy as np
 import pygame
 import time
+import ray
 
+ray.init()
 pygame.init()
 pygame.font.init()
 text_font = pygame.font.SysFont('Comic Sans MS', 30)
@@ -9,12 +11,11 @@ win = pygame.display.set_mode((800, 800))
 
 topleft = -2 + 1.5j
 increment = 0.005
-N = 300
+N = 200
 # topleft = -0.311962621923828+0.6462113426464844j
 # increment = 2.994653320320673e-09
 
 plane = np.array([[topleft + (k - i * 1j)* increment for i in range(800)] for k in range(800)])
-mandelbrot_plane = np.zeros((800, 800))
 
 def colouring(x):
     return x * 255 / N
@@ -22,18 +23,36 @@ def colouring(x):
 def mandelbrot(c, n):
     z = 0
     for i in range(n):
-        z = np.power(z, 2) + z + c
+        z = np.power(z, 2) + c
         if np.abs(z) >= 2:
             return i
     return n
 
+@ray.remote
+def gen_lines(start, stop, plane):
+    vals = []
+    for i in range(start, stop):
+        vals.append([mandelbrot(plane[i, j], N) for j in range(800)])
+    return vals
+
+
 def generate():
+    mandelbrot_plane = []
     print("Start rendering")
     win.fill((0, 0, 0))
     t1 = time.time()
+    # gen_lines(0, 800)
+    num_procs = 8
+    tasks = [gen_lines.remote(i * 800 // num_procs, (i + 1) * 800 // num_procs, plane) for i in range(num_procs)]
+    mandelbrot_plane_temp = np.array(ray.get(tasks))
+    for section in mandelbrot_plane_temp:
+        for line in section:
+            mandelbrot_plane.append(line)
+    mandelbrot_plane = np.array(mandelbrot_plane)
+
     for i in range(800):
         for j in range(800):
-            win.set_at((i,j), colouring(mandelbrot(plane[i, j], N)) * np.array([1,1,1]))
+            win.set_at((i, j), colouring(mandelbrot_plane[i,j]) * np.array([1, 1, 1]))
 
     zoom_text = text_font.render(f"{round(0.005 / increment)}x", False, (255, 255, 255))
     pygame.draw.rect(win, color=(0,0,0), rect=pygame.Rect(0, 750, 40 + zoom_text.get_width(), 50))
